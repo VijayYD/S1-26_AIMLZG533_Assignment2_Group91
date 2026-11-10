@@ -161,8 +161,15 @@ Already done locally (on CPU/Apple MPS, no CUDA) to catch code-level bugs. **Rep
 to confirm the environment itself (this GPU, this torch build) works before committing real
 GPU hours — it only takes a few minutes:
 
-```bash
-python -c "
+In a terminal (BITS lab or any other machine), run this as one `python -c "..."` shell
+command. **In Colab, don't** — a multi-line string inside `python -c "..."` doesn't survive
+being split across cells by `!`. Instead, run the Python part directly in a Python cell (no
+`!`), then run the two `nbconvert` lines as separate shell cells (each prefixed with `!`).
+
+Python part (paste directly into a Colab cell, no `!`; or save as a `.py` file and run with
+`python` in a terminal):
+
+```python
 import nbformat as nbf
 for name in ['UDL_Group91_Assignment2_PartA.ipynb', 'UDL_Group91_Assignment2_PartB.ipynb']:
     nb = nbf.read(name, as_version=4)
@@ -170,7 +177,11 @@ for name in ['UDL_Group91_Assignment2_PartA.ipynb', 'UDL_Group91_Assignment2_Par
         if cell.cell_type == 'code' and 'QUICK_RUN = False' in cell.source:
             cell.source = cell.source.replace('QUICK_RUN = False', 'QUICK_RUN = True')
     nbf.write(nb, name.replace('.ipynb', '_quicksrc.ipynb'))
-"
+```
+
+Then the two smoke-test runs (shell — prefix each with `!` in Colab):
+
+```bash
 python -m jupyter nbconvert --to notebook --execute --output UDL_Group91_Assignment2_PartA_quick.ipynb --ExecutePreprocessor.timeout=1800 UDL_Group91_Assignment2_PartA_quicksrc.ipynb
 python -m jupyter nbconvert --to notebook --execute --output UDL_Group91_Assignment2_PartB_quick.ipynb --ExecutePreprocessor.timeout=1800 UDL_Group91_Assignment2_PartB_quicksrc.ipynb
 ```
