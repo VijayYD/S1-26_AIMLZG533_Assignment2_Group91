@@ -88,10 +88,12 @@ python build_notebooks.py
 
 Confirms this exact GPU/torch build works before committing real GPU hours — a few minutes.
 
-First, make the `QUICK_RUN = True` copies (pure Python — save as a `.py` file or run with
-`python -c "$(cat <<'PYEOF' ... PYEOF)"`, or just paste into a `python` REPL/script):
+First, make the `QUICK_RUN = True` copies. **This is Python code — don't paste it directly
+into the bash prompt**, it'll fail with `bash: import: command not found`. Write it to a file
+and run that file with `python3`:
 
-```python
+```bash
+cat > toggle_quickrun.py << 'PYEOF'
 import nbformat as nbf
 for name in ['UDL_Group91_Assignment2_PartA.ipynb', 'UDL_Group91_Assignment2_PartB.ipynb']:
     nb = nbf.read(name, as_version=4)
@@ -99,6 +101,8 @@ for name in ['UDL_Group91_Assignment2_PartA.ipynb', 'UDL_Group91_Assignment2_Par
         if cell.cell_type == 'code' and 'QUICK_RUN = False' in cell.source:
             cell.source = cell.source.replace('QUICK_RUN = False', 'QUICK_RUN = True')
     nbf.write(nb, name.replace('.ipynb', '_quicksrc.ipynb'))
+PYEOF
+python3 toggle_quickrun.py
 ```
 
 Then run the smoke tests:
