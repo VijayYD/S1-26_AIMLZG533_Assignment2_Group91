@@ -1,0 +1,10 @@
+torchmetrics[image]
+torch-fidelity
+numpy
+matplotlib
+pandas
+tqdm
+nbformat
+nbconvert
+jupyter
+reportlab

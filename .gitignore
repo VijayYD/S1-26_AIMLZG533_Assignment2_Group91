@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Virtual environments (local smoke-test env only; never part of the submission)
+.venv/
+.venv*/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local QUICK_RUN smoke-test copies (never part of the real submission)
+*_quicksrc.ipynb
+*_quick.ipynb
+
+# CIFAR-10 dataset — re-downloaded automatically by torchvision on first run
+data/
+
+# Generated training artifacts (checkpoints, logs, latents, figures, history,
+# results) — all produced by running the notebooks on the GPU machine/Colab,
+# large, and fully reproducible from the notebooks themselves.
+outputs/
+
+# OS
+.DS_Store
+Thumbs.db
