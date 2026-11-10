@@ -95,9 +95,19 @@ into your Google Drive — no zip/upload step needed.
    to Drive still works — just make sure the `zip_path` in your unzip cell matches exactly
    where you uploaded it in the Drive file browser (the error you'll see otherwise is
    `FileNotFoundError: No such file or directory: '...zip'`).
-3. Every subsequent command in this README that's shown as a `bash` block runs in Colab too —
-   just prefix it with `!` in a code cell (and keep the `%cd` above active for the session,
-   Colab remembers it). E.g. `python build_notebooks.py` → `!python build_notebooks.py`.
+3. **Every subsequent command in this README shown in a `bash` block needs a `!` in front of
+   it when you paste it into a Colab cell** — a Colab code cell runs Python by default, not
+   shell, so pasting `python -c "..."` without `!` fails with `SyntaxError: invalid syntax`
+   (it's trying to run `python` as a Python statement). Prefix **every line**, e.g.:
+
+   ```python
+   !python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+   !python -m pip install -r requirements.txt
+   !python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+   ```
+
+   The `%cd` from step 2 is a magic, not a shell command — it has no `!` and Colab remembers
+   the directory for the rest of the session.
 
 **Colab session limits:** free-tier Colab disconnects after ~90 minutes idle and at most ~12
 hours continuous. The 50,000-iteration WGAN/WGAN-GP runs and the 50-epoch VAE/PixelCNN runs
