@@ -48,8 +48,16 @@ rm -rf outputs
 
 ### Option A: BITS Lab (Prayogshala) GPU machine
 
-Copy this whole folder onto the lab machine (USB drive, `scp`, shared drive, or `git` if you've
-pushed it to a repo) — whatever the lab normally uses for file transfer. Example with `scp`:
+Easiest: `git clone` the repo directly on the lab machine (it's public-enough to this group,
+or use a personal access token as the password if it's private):
+
+```bash
+git clone https://github.com/VijayYD/S1-26_AIMLZG533_Assignment2_Group91.git
+cd S1-26_AIMLZG533_Assignment2_Group91
+```
+
+Otherwise, copy this whole folder onto the lab machine (USB drive, `scp`, shared drive) —
+whatever the lab normally uses for file transfer. Example with `scp`:
 
 ```bash
 scp -r "UDL Assignment2" <lab-username>@<lab-host>:~/udl-assignment2
@@ -59,35 +67,35 @@ Then `ssh` in and `cd` into that folder for every command below.
 
 ### Option B: Google Colab
 
-1. Zip the project folder locally (exclude anything under `outputs/`, `data/`, and any local
-   `.venv*` folder if present):
+The project is on GitHub, so the simplest way to get it into Colab is `git clone` straight
+into your Google Drive — no zip/upload step needed.
 
-   ```bash
-   rm -rf outputs data .venv_smoketest
-   cd .. && zip -r UDL_Assignment2.zip "UDL Assignment2" -x "*.DS_Store"
-   ```
-
-2. Upload `UDL_Assignment2.zip` to your Google Drive (e.g. under `My Drive/UDL_Assignment2/`).
-3. Open a new Colab notebook → **Runtime → Change runtime type → T4 GPU** (or whatever GPU
+1. Open a new Colab notebook → **Runtime → Change runtime type → T4 GPU** (or whatever GPU
    tier you have access to) → Save.
-4. In the first Colab cell, mount Drive and unzip:
+2. In the first Colab cell, mount Drive and clone the repo there:
 
    ```python
    from google.colab import drive
    drive.mount('/content/drive')
 
-   import zipfile, pathlib
-   zip_path = '/content/drive/MyDrive/UDL_Assignment2/UDL_Assignment2.zip'
-   extract_to = '/content/drive/MyDrive/UDL_Assignment2/'
-   with zipfile.ZipFile(zip_path) as z:
-       z.extractall(extract_to)
-   %cd "/content/drive/MyDrive/UDL_Assignment2/UDL Assignment2"
+   %cd /content/drive/MyDrive
+   !git clone https://github.com/VijayYD/S1-26_AIMLZG533_Assignment2_Group91.git
+   %cd /content/drive/MyDrive/S1-26_AIMLZG533_Assignment2_Group91
    ```
 
    **Keep the project on Google Drive, not `/content` directly** — `/content` is wiped every
    time the Colab runtime disconnects, which would destroy checkpoints mid-training. Drive
    persists, so `RESUME = True` can pick back up after a disconnect.
-5. Every subsequent command in this README that's shown as a `bash` block runs in Colab too —
+
+   If the repo is private, you'll be prompted for GitHub credentials on `git clone` — use a
+   [personal access token](https://github.com/settings/tokens) as the password, or clone with
+   `https://<token>@github.com/VijayYD/S1-26_AIMLZG533_Assignment2_Group91.git` instead.
+
+   If you already have the folder locally and prefer not to use git, zipping it and uploading
+   to Drive still works — just make sure the `zip_path` in your unzip cell matches exactly
+   where you uploaded it in the Drive file browser (the error you'll see otherwise is
+   `FileNotFoundError: No such file or directory: '...zip'`).
+3. Every subsequent command in this README that's shown as a `bash` block runs in Colab too —
    just prefix it with `!` in a code cell (and keep the `%cd` above active for the session,
    Colab remembers it). E.g. `python build_notebooks.py` → `!python build_notebooks.py`.
 
