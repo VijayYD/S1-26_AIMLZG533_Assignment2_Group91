@@ -259,14 +259,21 @@ def train_vae(beta, epochs):
     model = BetaVAE().to(DEVICE)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
+    start_epoch = 1
     if RESUME and ckpt_path.exists() and hist_path.exists():
-        model.load_state_dict(torch.load(ckpt_path, map_location=DEVICE))
+        ckpt = torch.load(ckpt_path, map_location=DEVICE)
+        model.load_state_dict(ckpt["model"])
+        optimizer.load_state_dict(ckpt["optimizer"])
         history = load_json(hist_path)
-        print(f"[beta={beta}] Resumed from checkpoint ({len(history['epoch'])} epochs).")
+        start_epoch = len(history["epoch"]) + 1
+        print(f"[beta={beta}] Resumed from checkpoint after epoch {start_epoch - 1} "
+              f"({len(history['epoch'])}/{epochs} done).")
     else:
         history = {"epoch": [], "train_loss": [], "train_recon": [], "train_kl": [],
                    "test_psnr": [], "test_recon": [], "test_kl": [], "epoch_time_s": []}
-        for epoch in range(1, epochs + 1):
+
+    if start_epoch <= epochs:
+        for epoch in range(start_epoch, epochs + 1):
             model.train()
             ep_loss = ep_recon = ep_kl = 0.0
             n_batches = 0
@@ -307,8 +314,12 @@ def train_vae(beta, epochs):
             if DEVICE.type == "mps":
                 torch.mps.empty_cache()  # MPS caching allocator can otherwise grow unbounded over long runs
 
-        torch.save(model.state_dict(), ckpt_path)
-        save_json(history, hist_path)
+            # Checkpoint after every epoch (not just at the end) so a crash/disconnect/
+            # session-timeout loses at most one epoch of progress, not the whole run.
+            torch.save({"model": model.state_dict(), "optimizer": optimizer.state_dict()}, ckpt_path)
+            save_json(history, hist_path)
+    else:
+        print(f"[beta={beta}] Already completed {epochs} epochs; nothing to train.")
 
     # Always re-print the saved log so outputs stay embedded even when resumed
     print(f"\n--- {tag} training log ({'resumed' if RESUME and ckpt_path.exists() else 'fresh'}) ---")
@@ -618,14 +629,21 @@ def train_vqvae(K, epochs):
     model = VQVAE(K).to(DEVICE)
     optimizer = torch.optim.Adam(model.parameters(), lr=2e-4)
 
+    start_epoch = 1
     if RESUME and ckpt_path.exists() and hist_path.exists():
-        model.load_state_dict(torch.load(ckpt_path, map_location=DEVICE))
+        ckpt = torch.load(ckpt_path, map_location=DEVICE)
+        model.load_state_dict(ckpt["model"])
+        optimizer.load_state_dict(ckpt["optimizer"])
         history = load_json(hist_path)
-        print(f"[K={K}] Resumed from checkpoint ({len(history['epoch'])} epochs).")
+        start_epoch = len(history["epoch"]) + 1
+        print(f"[K={K}] Resumed from checkpoint after epoch {start_epoch - 1} "
+              f"({len(history['epoch'])}/{epochs} done).")
     else:
         history = {"epoch": [], "train_mse": [], "test_psnr": [], "test_mse": [],
                    "perplexity": [], "codes_used_pct": [], "dead_codes_reset": [], "epoch_time_s": []}
-        for epoch in range(1, epochs + 1):
+
+    if start_epoch <= epochs:
+        for epoch in range(start_epoch, epochs + 1):
             model.train()
             ep_mse, n_batches = 0.0, 0
             last_z_batch = None
@@ -669,8 +687,12 @@ def train_vqvae(K, epochs):
             if DEVICE.type == "mps":
                 torch.mps.empty_cache()  # MPS caching allocator can otherwise grow unbounded over long runs
 
-        torch.save(model.state_dict(), ckpt_path)
-        save_json(history, hist_path)
+            # Checkpoint after every epoch so a crash/disconnect/session-timeout loses at
+            # most one epoch of progress, not the whole run.
+            torch.save({"model": model.state_dict(), "optimizer": optimizer.state_dict()}, ckpt_path)
+            save_json(history, hist_path)
+    else:
+        print(f"[K={K}] Already completed {epochs} epochs; nothing to train.")
 
     print(f"\n--- {tag} training log ---")
     for i in range(len(history["epoch"])):
@@ -867,14 +889,21 @@ def train_pixelcnn(K, epochs, train_idx, test_idx):
     optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
     n_latents = H * W
 
+    start_epoch = 1
     if RESUME and ckpt_path.exists() and hist_path.exists():
-        model.load_state_dict(torch.load(ckpt_path, map_location=DEVICE))
+        ckpt = torch.load(ckpt_path, map_location=DEVICE)
+        model.load_state_dict(ckpt["model"])
+        optimizer.load_state_dict(ckpt["optimizer"])
         history = load_json(hist_path)
-        print(f"[PixelCNN K={K}] Resumed ({len(history['epoch'])} epochs).")
+        start_epoch = len(history["epoch"]) + 1
+        print(f"[PixelCNN K={K}] Resumed from checkpoint after epoch {start_epoch - 1} "
+              f"({len(history['epoch'])}/{epochs} done).")
     else:
         history = {"epoch": [], "train_nll_nats": [], "test_nll_nats": [],
                    "train_bits_per_latent": [], "test_bits_per_latent": [], "epoch_time_s": []}
-        for epoch in range(1, epochs + 1):
+
+    if start_epoch <= epochs:
+        for epoch in range(start_epoch, epochs + 1):
             model.train()
             ep_nll, n_batches = 0.0, 0
             with Timer() as t:
@@ -910,8 +939,12 @@ def train_pixelcnn(K, epochs, train_idx, test_idx):
             if DEVICE.type == "mps":
                 torch.mps.empty_cache()  # MPS caching allocator can otherwise grow unbounded over long runs
 
-        torch.save(model.state_dict(), ckpt_path)
-        save_json(history, hist_path)
+            # Checkpoint after every epoch so a crash/disconnect/session-timeout loses at
+            # most one epoch of progress, not the whole run.
+            torch.save({"model": model.state_dict(), "optimizer": optimizer.state_dict()}, ckpt_path)
+            save_json(history, hist_path)
+    else:
+        print(f"[PixelCNN K={K}] Already completed {epochs} epochs; nothing to train.")
 
     print(f"\n--- {tag} training log ---")
     for i in range(len(history["epoch"])):
@@ -1247,11 +1280,15 @@ def train_gan(name, gen_iters, use_gp):
     data_iter = infinite_loader(train_loader)
 
     if RESUME and ckpt_g.exists() and ckpt_c.exists() and hist_path.exists():
-        generator.load_state_dict(torch.load(ckpt_g, map_location=DEVICE))
-        critic.load_state_dict(torch.load(ckpt_c, map_location=DEVICE))
+        g_ckpt = torch.load(ckpt_g, map_location=DEVICE)
+        c_ckpt = torch.load(ckpt_c, map_location=DEVICE)
+        generator.load_state_dict(g_ckpt["model"])
+        opt_g.load_state_dict(g_ckpt["optimizer"])
+        critic.load_state_dict(c_ckpt["model"])
+        opt_c.load_state_dict(c_ckpt["optimizer"])
         history = load_json(hist_path)
-        print(f"[{tag}] Resumed from checkpoint at iteration {history['iteration'][-1] if history['iteration'] else 0}.")
         start_iter = history["iteration"][-1] if history["iteration"] else 0
+        print(f"[{tag}] Resumed from checkpoint at iteration {start_iter}/{gen_iters}.")
     else:
         history = {"iteration": [], "critic_loss": [], "gen_loss": [], "wasserstein_est": [],
                    "gp_value": [], "iter_time_s": [], "quick_fid_iter": [], "quick_fid": []}
@@ -1328,11 +1365,12 @@ def train_gan(name, gen_iters, use_gp):
                     best_fid, best_iter = q_fid, it
                     torch.save(generator.state_dict(), ckpt_g.with_name(f"{tag}_generator_best.pt"))
 
+                # Checkpoint (model + optimizer) at the same cadence as the history save, so a
+                # crash/disconnect/session-timeout loses at most QUICK_FID_EVERY iterations of
+                # progress, not the whole run. This is the file RESUME looks for above.
+                torch.save({"model": generator.state_dict(), "optimizer": opt_g.state_dict()}, ckpt_g)
+                torch.save({"model": critic.state_dict(), "optimizer": opt_c.state_dict()}, ckpt_c)
                 save_json(history, hist_path)
-
-        torch.save(generator.state_dict(), ckpt_g)
-        torch.save(critic.state_dict(), ckpt_c)
-        save_json(history, hist_path)
     else:
         print(f"[{tag}] Checkpoint already covers {gen_iters} iterations; nothing to train.")
 

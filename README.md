@@ -12,6 +12,15 @@ each is fully self-contained (yes, the steps repeat across platforms on purpose,
 have to jump around). Once training finishes on whichever platform you used, skip to
 **"Common steps after training"** near the end — that part is the same everywhere.
 
+## How RESUME actually works
+
+`RESUME = True` checkpoints (model + optimizer state) after **every epoch** for VAE/VQ-VAE/
+PixelCNN, and every `QUICK_FID_EVERY` generator iterations for the GAN. So a disconnect/crash
+loses at most one epoch (or one `QUICK_FID_EVERY` block of iterations), not the whole run —
+just re-run the same cell/command and it continues from exactly where it left off. (An earlier
+version of this code only saved the final checkpoint at the very end of each model's training,
+which meant an interrupted run restarted that model from scratch — fixed now.)
+
 ## Folder layout
 
 ```
