@@ -555,15 +555,21 @@ class VectorQuantizerEMA(nn.Module):
         quantized = quantized.view(z_perm.shape)
 
         if self.training:
-            self.ema_cluster_size.mul_(self.decay).add_(encodings.sum(0), alpha=1 - self.decay)
-            n = self.ema_cluster_size.sum()
-            cluster_size = (self.ema_cluster_size + self.eps) / (n + self.K * self.eps) * n
+            # no_grad is essential here: `dw = encodings.t() @ flat` is connected to the
+            # encoder's graph (flat requires grad), and in-place updating a non-grad buffer
+            # (ema_w/embedding) with a grad-tracked value makes the buffer pick up a grad_fn
+            # that chains into the next iteration via self.embedding, growing without bound
+            # across the whole run and eventually OOM-ing (observed on both CUDA and MPS).
+            with torch.no_grad():
+                self.ema_cluster_size.mul_(self.decay).add_(encodings.sum(0), alpha=1 - self.decay)
+                n = self.ema_cluster_size.sum()
+                cluster_size = (self.ema_cluster_size + self.eps) / (n + self.K * self.eps) * n
 
-            dw = encodings.t() @ flat
-            self.ema_w.mul_(self.decay).add_(dw, alpha=1 - self.decay)
-            self.embedding.copy_(self.ema_w / cluster_size.unsqueeze(1))
+                dw = encodings.t() @ flat
+                self.ema_w.mul_(self.decay).add_(dw, alpha=1 - self.decay)
+                self.embedding.copy_(self.ema_w / cluster_size.unsqueeze(1))
 
-            self._usage += encodings.sum(0).detach().cpu()
+                self._usage += encodings.sum(0).detach().cpu()
 
         commitment_loss = F.mse_loss(quantized.detach(), z_perm)
         loss = self.commitment_cost * commitment_loss
