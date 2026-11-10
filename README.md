@@ -7,13 +7,10 @@
 All code (`udl_utils.py`, `build_notebooks.py`, and the three notebooks) was written and
 **smoke-tested** (`QUICK_RUN = True`) on a local Mac with no CUDA GPU, to catch code-level bugs
 cheaply before spending real GPU time. **The full training run (`QUICK_RUN = False`) has not
-been executed yet.** You will run it yourself — on the BITS Lab (Prayogshala) GPU machine
-and/or Google Colab — following the steps below, then report the results back.
-
-These notebooks are plain PyTorch + `pathlib`, with no OS-specific shell magics and the
-required `cuda → mps → cpu` device order, so the same commands work on **any machine with a
-Python environment**: BITS Lab, Google Colab, Kaggle, your own GPU box, etc. Platform-specific
-notes (getting the files there, session persistence) are called out separately below.
+been executed yet.** Pick **one** of the platform sections below and follow it top to bottom —
+each is fully self-contained (yes, the steps repeat across platforms on purpose, so you never
+have to jump around). Once training finishes on whichever platform you used, skip to
+**"Common steps after training"** near the end — that part is the same everywhere.
 
 ## Folder layout
 
@@ -36,98 +33,25 @@ notes (getting the files there, session persistence) are called out separately b
 └── submission/         # final deliverables (populated after the full run + HTML/PDF export)
 ```
 
-**Before you start a real run on any platform**, delete the `outputs/` folder if it already
-exists (it may contain my local `QUICK_RUN = True` smoke-test artifacts, which must never be
-picked up by `RESUME = True` as if they were a finished full run):
+---
 
-```bash
-rm -rf outputs
-```
+# Group 1 — BITS Lab (Prayogshala) GPU machine
 
-## Step 0 — Get the files onto the platform
-
-### Option A: BITS Lab (Prayogshala) GPU machine
-
-Easiest: `git clone` the repo directly on the lab machine (it's public-enough to this group,
-or use a personal access token as the password if it's private):
+### 1.1 Get the files there
 
 ```bash
 git clone https://github.com/VijayYD/S1-26_AIMLZG533_Assignment2_Group91.git
 cd S1-26_AIMLZG533_Assignment2_Group91
 ```
 
-Otherwise, copy this whole folder onto the lab machine (USB drive, `scp`, shared drive) —
-whatever the lab normally uses for file transfer. Example with `scp`:
+(If the repo is private, `git clone` prompts for credentials — use a
+[personal access token](https://github.com/settings/tokens) as the password.)
 
-```bash
-scp -r "UDL Assignment2" <lab-username>@<lab-host>:~/udl-assignment2
-```
+### 1.2 Check the GPU and existing PyTorch install
 
-Then `ssh` in and `cd` into that folder for every command below.
-
-### Option B: Google Colab
-
-The project is on GitHub, so the simplest way to get it into Colab is `git clone` straight
-into your Google Drive — no zip/upload step needed.
-
-1. Open a new Colab notebook → **Runtime → Change runtime type → T4 GPU** (or whatever GPU
-   tier you have access to) → Save.
-2. In the first Colab cell, mount Drive and clone the repo there:
-
-   ```python
-   from google.colab import drive
-   drive.mount('/content/drive')
-
-   %cd /content/drive/MyDrive
-   !git clone https://github.com/VijayYD/S1-26_AIMLZG533_Assignment2_Group91.git
-   %cd /content/drive/MyDrive/S1-26_AIMLZG533_Assignment2_Group91
-   ```
-
-   **Keep the project on Google Drive, not `/content` directly** — `/content` is wiped every
-   time the Colab runtime disconnects, which would destroy checkpoints mid-training. Drive
-   persists, so `RESUME = True` can pick back up after a disconnect.
-
-   If the repo is private, you'll be prompted for GitHub credentials on `git clone` — use a
-   [personal access token](https://github.com/settings/tokens) as the password, or clone with
-   `https://<token>@github.com/VijayYD/S1-26_AIMLZG533_Assignment2_Group91.git` instead.
-
-   If you already have the folder locally and prefer not to use git, zipping it and uploading
-   to Drive still works — just make sure the `zip_path` in your unzip cell matches exactly
-   where you uploaded it in the Drive file browser (the error you'll see otherwise is
-   `FileNotFoundError: No such file or directory: '...zip'`).
-3. **Every subsequent command in this README shown in a `bash` block needs a `!` in front of
-   it when you paste it into a Colab cell** — a Colab code cell runs Python by default, not
-   shell, so pasting `python -c "..."` without `!` fails with `SyntaxError: invalid syntax`
-   (it's trying to run `python` as a Python statement). Prefix **every line**, e.g.:
-
-   ```python
-   !python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
-   !python -m pip install -r requirements.txt
-   !python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
-   ```
-
-   The `%cd` from step 2 is a magic, not a shell command — it has no `!` and Colab remembers
-   the directory for the rest of the session.
-
-**Colab session limits:** free-tier Colab disconnects after ~90 minutes idle and at most ~12
-hours continuous. The 50,000-iteration WGAN/WGAN-GP runs and the 50-epoch VAE/PixelCNN runs
-may not finish in one sitting. That's fine — `RESUME = True` means you can just re-run the same
-`nbconvert` command after reconnecting and it will continue from the last saved checkpoint
-instead of restarting. Keep the browser tab open/active to avoid idle disconnects, or reduce
-`WGAN_GEN_ITERS` / `WGANGP_GEN_ITERS` / the epoch counts in the config cells if your session
-budget is tight (note any such change in the "Deviations" section below).
-
-### Option C: any other machine with a CUDA GPU (your own box, Kaggle, etc.)
-
-Same as Option A — copy the folder over, then follow the steps below from a terminal (or from
-notebook cells with `!` if it's a hosted-notebook platform like Kaggle).
-
-## Step 1 — Check the GPU and existing PyTorch install
-
-**Do not upgrade, downgrade, or reinstall torch/torchvision** — use whatever the platform
-already provides (the BITS lab has `torch 2.8.0+cu128` preinstalled; Colab ships its own
-current CUDA build). `requirements.txt` deliberately excludes torch/torchvision so installing
-it never touches them.
+**Do not upgrade, downgrade, or reinstall torch/torchvision** — the lab machine already has
+`torch 2.8.0+cu128` installed with the GPU detected. `requirements.txt` deliberately excludes
+torch/torchvision so installing it never touches them.
 
 ```bash
 python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
@@ -135,39 +59,28 @@ python -m pip install -r requirements.txt
 python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
 ```
 
-Confirm the torch version/CUDA-availability printed is the **same before and after** installing
-`requirements.txt`. If it changed, something in `requirements.txt` pulled in a different torch —
-stop and reinstall the platform's original build before continuing. If `torchvision` is
-missing on the BITS lab machine specifically:
+Confirm the version/CUDA-availability printed is the **same before and after** installing
+`requirements.txt`. If it changed, stop and reinstall the lab's original torch build before
+continuing. If `torchvision` is missing:
 
 ```bash
 python -m pip install torchvision --index-url https://download.pytorch.org/whl/cu128
 ```
 
-(On Colab, torchvision is already bundled with torch — this won't be needed there.)
+### 1.3 Build the notebooks
 
-## Step 2 — Build the notebooks
-
-The three `.ipynb` files are already built and committed, but if you ever change
-`build_notebooks.py`, rebuild with:
+Already built and committed. Only needed if you change `build_notebooks.py`:
 
 ```bash
 python build_notebooks.py
 ```
 
-## Step 3 — Smoke test (QUICK_RUN = True)
+### 1.4 Smoke test (QUICK_RUN = True)
 
-Already done locally (on CPU/Apple MPS, no CUDA) to catch code-level bugs. **Repeat it here**
-to confirm the environment itself (this GPU, this torch build) works before committing real
-GPU hours — it only takes a few minutes:
+Confirms this exact GPU/torch build works before committing real GPU hours — a few minutes.
 
-In a terminal (BITS lab or any other machine), run this as one `python -c "..."` shell
-command. **In Colab, don't** — a multi-line string inside `python -c "..."` doesn't survive
-being split across cells by `!`. Instead, run the Python part directly in a Python cell (no
-`!`), then run the two `nbconvert` lines as separate shell cells (each prefixed with `!`).
-
-Python part (paste directly into a Colab cell, no `!`; or save as a `.py` file and run with
-`python` in a terminal):
+First, make the `QUICK_RUN = True` copies (pure Python — save as a `.py` file or run with
+`python -c "$(cat <<'PYEOF' ... PYEOF)"`, or just paste into a `python` REPL/script):
 
 ```python
 import nbformat as nbf
@@ -179,18 +92,16 @@ for name in ['UDL_Group91_Assignment2_PartA.ipynb', 'UDL_Group91_Assignment2_Par
     nbf.write(nb, name.replace('.ipynb', '_quicksrc.ipynb'))
 ```
 
-Then the two smoke-test runs (shell — prefix each with `!` in Colab):
+Then run the smoke tests:
 
 ```bash
 python -m jupyter nbconvert --to notebook --execute --output UDL_Group91_Assignment2_PartA_quick.ipynb --ExecutePreprocessor.timeout=1800 UDL_Group91_Assignment2_PartA_quicksrc.ipynb
 python -m jupyter nbconvert --to notebook --execute --output UDL_Group91_Assignment2_PartB_quick.ipynb --ExecutePreprocessor.timeout=1800 UDL_Group91_Assignment2_PartB_quicksrc.ipynb
 ```
 
-Open the two `_quick.ipynb` outputs (or just check the command exited with no traceback) and
-confirm every cell ran cleanly and the `RUN MODE: QUICK_RUN (smoke test)` banner printed.
-
-Then **clean up before the real run** — this is important, `RESUME = True` would otherwise pick
-up these 2-epoch smoke-test checkpoints as if they were the finished full run:
+Confirm both commands exit with no traceback and print the `RUN MODE: QUICK_RUN (smoke test)`
+banner. Then **clean up before the real run** — important, `RESUME = True` would otherwise
+mistake these 2-epoch smoke-test checkpoints for a finished full run:
 
 ```bash
 rm -f UDL_Group91_Assignment2_PartA_quicksrc.ipynb UDL_Group91_Assignment2_PartA_quick.ipynb
@@ -198,38 +109,289 @@ rm -f UDL_Group91_Assignment2_PartB_quicksrc.ipynb UDL_Group91_Assignment2_PartB
 rm -rf outputs data
 ```
 
-## Step 4 — Full run (QUICK_RUN = False)
+### 1.5 Full run (QUICK_RUN = False)
 
-The committed notebooks already have `QUICK_RUN = False`. This is long-running (expect several
-hours, dominated by the 50,000-iteration WGAN/WGAN-GP runs and the PixelCNN training) — launch
-each as a background process and monitor its log rather than waiting in the foreground:
+The committed notebooks already have `QUICK_RUN = False`. Expect several hours total, dominated
+by the 50,000-iteration WGAN/WGAN-GP runs and PixelCNN training — launch each as a background
+process and monitor its log:
 
 ```bash
 mkdir -p outputs/logs
 nohup python -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 UDL_Group91_Assignment2_PartA.ipynb > outputs/logs/partA.log 2>&1 &
+tail -f outputs/logs/partA.log
 ```
 
-Watch progress with `tail -f outputs/logs/partA.log`. Wait for Part A to finish, then run
-Part B the same way (run them sequentially unless you've confirmed GPU memory clearly allows
-both at once):
+Wait for Part A to finish (`Ctrl+C` just stops `tail`, not the background job), then run Part B
+the same way (sequentially, unless you've confirmed GPU memory clearly allows both at once):
 
 ```bash
 nohup python -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 UDL_Group91_Assignment2_PartB.ipynb > outputs/logs/partB.log 2>&1 &
+tail -f outputs/logs/partB.log
 ```
 
-`RESUME = True` means either notebook can be safely re-run after a crash, a Colab disconnect,
-or a lab-session timeout without losing finished models — it reloads any checkpoint + history
-already on disk and continues.
+`RESUME = True` means either notebook can be safely re-run after a crash or a lab-session
+timeout — it reloads any checkpoint + history already on disk and continues.
 
-## Step 5 — Sanity-check results, retrain if needed
+**→ Once both finish, jump to "Common steps after training" below.**
 
-After both finish, check `outputs/results/partA_results.json` and `partB_results.json` against
-the expected characteristics (VQ-VAE PSNR clearly above VAE PSNR, WGAN-GP FID lower than WGAN,
-no model still improving sharply at its last epoch/iteration). If a model looks under-trained,
-increase its epoch/iteration count in the relevant config cell, re-run just that notebook, and
-record the change in "Deviations" below.
+---
 
-## Step 6 — Build Part C and export HTML
+# Group 2 — Google Colab
+
+### 2.1 Get the files there
+
+Clone straight into Google Drive so the project (and its checkpoints) survive a runtime
+disconnect — `/content` is wiped every time Colab disconnects, which would destroy
+mid-training checkpoints; Drive persists.
+
+1. New Colab notebook → **Runtime → Change runtime type → T4 GPU** (or whatever tier you have)
+   → Save.
+2. First cell:
+
+   ```python
+   from google.colab import drive
+   drive.mount('/content/drive')
+
+   %cd /content/drive/MyDrive
+   !git clone https://github.com/VijayYD/S1-26_AIMLZG533_Assignment2_Group91.git
+   %cd /content/drive/MyDrive/S1-26_AIMLZG533_Assignment2_Group91
+   ```
+
+   If the repo is private, `git clone` prompts for credentials — use a
+   [personal access token](https://github.com/settings/tokens) as the password, or clone with
+   `https://<token>@github.com/VijayYD/S1-26_AIMLZG533_Assignment2_Group91.git`.
+
+**Important — every shell command below needs a `!` in front of it in a Colab cell.** A Colab
+cell runs Python by default, not shell, so pasting `python -c "..."` without `!` fails with
+`SyntaxError: invalid syntax`. `%cd` is a magic (no `!`); everything else shown as a `bash`
+block below needs `!` added when you paste it into Colab.
+
+### 2.2 Check the GPU and existing PyTorch install
+
+**Do not upgrade, downgrade, or reinstall torch/torchvision** — use whatever Colab's current
+runtime already provides. `requirements.txt` deliberately excludes torch/torchvision.
+
+```python
+!python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+!python -m pip install -r requirements.txt
+!python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
+Confirm the version/CUDA-availability is the **same before and after**. Torchvision ships
+bundled with Colab's torch, so the lab's separate torchvision install step isn't needed here.
+
+### 2.3 Build the notebooks
+
+Already built and committed. Only needed if you change `build_notebooks.py`:
+
+```python
+!python build_notebooks.py
+```
+
+### 2.4 Smoke test (QUICK_RUN = True)
+
+Confirms this GPU/torch build works before committing real GPU hours — a few minutes.
+
+**Cell 1 — plain Python, no `!`** (makes the `QUICK_RUN = True` copies):
+
+```python
+import nbformat as nbf
+for name in ['UDL_Group91_Assignment2_PartA.ipynb', 'UDL_Group91_Assignment2_PartB.ipynb']:
+    nb = nbf.read(name, as_version=4)
+    for cell in nb.cells:
+        if cell.cell_type == 'code' and 'QUICK_RUN = False' in cell.source:
+            cell.source = cell.source.replace('QUICK_RUN = False', 'QUICK_RUN = True')
+    nbf.write(nb, name.replace('.ipynb', '_quicksrc.ipynb'))
+```
+
+**Cell 2 — shell:**
+
+```python
+!python -m jupyter nbconvert --to notebook --execute --output UDL_Group91_Assignment2_PartA_quick.ipynb --ExecutePreprocessor.timeout=1800 UDL_Group91_Assignment2_PartA_quicksrc.ipynb
+```
+
+**Cell 3 — shell:**
+
+```python
+!python -m jupyter nbconvert --to notebook --execute --output UDL_Group91_Assignment2_PartB_quick.ipynb --ExecutePreprocessor.timeout=1800 UDL_Group91_Assignment2_PartB_quicksrc.ipynb
+```
+
+Confirm both cells run with no traceback and print `RUN MODE: QUICK_RUN (smoke test)`. Then
+**clean up before the real run** — important, `RESUME = True` would otherwise mistake these
+2-epoch smoke-test checkpoints for a finished full run:
+
+```python
+!rm -f UDL_Group91_Assignment2_PartA_quicksrc.ipynb UDL_Group91_Assignment2_PartA_quick.ipynb
+!rm -f UDL_Group91_Assignment2_PartB_quicksrc.ipynb UDL_Group91_Assignment2_PartB_quick.ipynb
+!rm -rf outputs data
+```
+
+### 2.5 Full run (QUICK_RUN = False)
+
+The committed notebooks already have `QUICK_RUN = False`. Expect several hours total — **free
+Colab disconnects after ~90 minutes idle and at most ~12 hours continuous**, and the
+50,000-iteration WGAN/WGAN-GP runs plus 50-epoch VAE/PixelCNN training will likely outlast one
+sitting. That's fine: `RESUME = True` means you just re-run the same `nbconvert` command after
+reconnecting and it continues from the last saved checkpoint instead of restarting. Keep the
+tab active to reduce idle disconnects, or lower `WGAN_GEN_ITERS` / `WGANGP_GEN_ITERS` / the
+epoch counts in the config cells if your session budget is tight (note any such change in
+"Deviations" below).
+
+```python
+!mkdir -p outputs/logs
+!python -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 UDL_Group91_Assignment2_PartA.ipynb
+```
+
+This runs in the foreground and the cell stays busy until Part A finishes (that's normal and
+fine on Colab — there's no background-job convenience here the way a lab terminal has). Once
+it completes, do the same for Part B:
+
+```python
+!python -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 UDL_Group91_Assignment2_PartB.ipynb
+```
+
+If the cell gets interrupted by a disconnect, just reconnect and re-run the same cell —
+`RESUME = True` picks up where it left off.
+
+**→ Once both finish, jump to "Common steps after training" below.**
+
+---
+
+# Group 3 — Kaggle Notebooks
+
+### 3.1 Get the files there
+
+1. New Kaggle Notebook → right panel → **Settings → Accelerator → GPU** (T4 x2 or P100,
+   whichever is offered) → **Settings → Internet → On** (needed for `git clone` and `pip
+   install`).
+2. First cell:
+
+   ```python
+   %cd /kaggle/working
+   !git clone https://github.com/VijayYD/S1-26_AIMLZG533_Assignment2_Group91.git
+   %cd /kaggle/working/S1-26_AIMLZG533_Assignment2_Group91
+   ```
+
+   If the repo is private, `git clone` prompts for credentials — use a
+   [personal access token](https://github.com/settings/tokens) as the password.
+
+**Important — every shell command below needs a `!` in front of it in a Kaggle cell**, same
+reason as Colab: a notebook cell runs Python by default, not shell.
+
+**Kaggle session persistence is different from Colab/Drive** — `/kaggle/working` is **not**
+automatically kept across a fresh interactive session the way Google Drive is. Within one
+active session it persists fine across cells/time (so `RESUME = True` works for reconnects
+within that session, and Kaggle GPU sessions run up to ~12 hours). But if you *end* the
+session and start a new one, `/kaggle/working` resets. To carry checkpoints across sessions,
+periodically zip and download `outputs/`, or "Save Version" (Kaggle's commit/snapshot feature)
+so the output is preserved and can be reloaded as an input to a new session.
+
+### 3.2 Check the GPU and existing PyTorch install
+
+**Do not upgrade, downgrade, or reinstall torch/torchvision** — use whatever Kaggle's current
+runtime already provides. `requirements.txt` deliberately excludes torch/torchvision.
+
+```python
+!python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+!python -m pip install -r requirements.txt
+!python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
+Confirm the version/CUDA-availability is the **same before and after**. Torchvision ships
+bundled with Kaggle's torch.
+
+### 3.3 Build the notebooks
+
+Already built and committed. Only needed if you change `build_notebooks.py`:
+
+```python
+!python build_notebooks.py
+```
+
+### 3.4 Smoke test (QUICK_RUN = True)
+
+Confirms this GPU/torch build works before committing real GPU hours — a few minutes.
+
+**Cell 1 — plain Python, no `!`:**
+
+```python
+import nbformat as nbf
+for name in ['UDL_Group91_Assignment2_PartA.ipynb', 'UDL_Group91_Assignment2_PartB.ipynb']:
+    nb = nbf.read(name, as_version=4)
+    for cell in nb.cells:
+        if cell.cell_type == 'code' and 'QUICK_RUN = False' in cell.source:
+            cell.source = cell.source.replace('QUICK_RUN = False', 'QUICK_RUN = True')
+    nbf.write(nb, name.replace('.ipynb', '_quicksrc.ipynb'))
+```
+
+**Cell 2 — shell:**
+
+```python
+!python -m jupyter nbconvert --to notebook --execute --output UDL_Group91_Assignment2_PartA_quick.ipynb --ExecutePreprocessor.timeout=1800 UDL_Group91_Assignment2_PartA_quicksrc.ipynb
+```
+
+**Cell 3 — shell:**
+
+```python
+!python -m jupyter nbconvert --to notebook --execute --output UDL_Group91_Assignment2_PartB_quick.ipynb --ExecutePreprocessor.timeout=1800 UDL_Group91_Assignment2_PartB_quicksrc.ipynb
+```
+
+Confirm both cells run with no traceback and print `RUN MODE: QUICK_RUN (smoke test)`. Then
+**clean up before the real run**:
+
+```python
+!rm -f UDL_Group91_Assignment2_PartA_quicksrc.ipynb UDL_Group91_Assignment2_PartA_quick.ipynb
+!rm -f UDL_Group91_Assignment2_PartB_quicksrc.ipynb UDL_Group91_Assignment2_PartB_quick.ipynb
+!rm -rf outputs data
+```
+
+### 3.5 Full run (QUICK_RUN = False)
+
+```python
+!mkdir -p outputs/logs
+!python -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 UDL_Group91_Assignment2_PartA.ipynb
+```
+
+Runs in the foreground — the cell stays busy until Part A finishes. Then:
+
+```python
+!python -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 UDL_Group91_Assignment2_PartB.ipynb
+```
+
+If you're worried about hitting the session time limit, periodically zip and download
+`outputs/` (or "Save Version") so a checkpoint is never lost even if the session ends
+unexpectedly — `RESUME = True` will continue from whatever's in `outputs/checkpoints/` +
+`outputs/history/` once you restore it into a new session.
+
+**→ Once both finish, jump to "Common steps after training" below.**
+
+---
+
+# Group 4 — Any other CUDA machine (own box, cloud VM, etc.)
+
+Same as Group 1 (BITS Lab) — it's just a terminal with a CUDA GPU:
+
+1. `git clone https://github.com/VijayYD/S1-26_AIMLZG533_Assignment2_Group91.git && cd S1-26_AIMLZG533_Assignment2_Group91`
+2. Follow **1.2 → 1.5** above exactly (check torch/CUDA without touching the existing install,
+   smoke test, then the full run).
+
+**→ Once both finish, jump to "Common steps after training" below.**
+
+---
+
+# Common steps after training
+
+These apply no matter which platform you used.
+
+## Sanity-check results, retrain if needed
+
+Check `outputs/results/partA_results.json` and `partB_results.json` against the expected
+characteristics (VQ-VAE PSNR clearly above VAE PSNR, WGAN-GP FID lower than WGAN, no model
+still improving sharply at its last epoch/iteration). If a model looks under-trained, increase
+its epoch/iteration count in the relevant config cell, re-run just that notebook, and record
+the change in "Deviations" below.
+
+## Build Part C and export HTML
 
 ```bash
 python -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 UDL_Group91_Assignment2_PartC.ipynb
@@ -238,7 +400,9 @@ python -m jupyter nbconvert --to html UDL_Group91_Assignment2_PartB.ipynb
 python -m jupyter nbconvert --to html UDL_Group91_Assignment2_PartC.ipynb
 ```
 
-## Step 7 — Verify, then collect the submission
+(Add `!` in front of each line if you're on Colab/Kaggle.)
+
+## Verify, then collect the submission
 
 Open each HTML and the PDF; confirm the student table, all required plots/tables/grids are
 present, no error tracebacks, and the `RUN MODE: FULL RUN` banner (not `QUICK_RUN`) is printed
@@ -248,18 +412,18 @@ near the top. Then copy into `submission/`:
 - `UDL_Group91_Assignment2_PartB.ipynb` + `.html`
 - `UDL_Group91_Assignment2_PartC.pdf`
 - `UDL_Group91_Assignment2_Lab_Screenshot.jpg` — **take this manually**: a screenshot of the
-  lab/Colab session showing the environment cell / `nvidia-smi` output with the notebook
-  running, as proof of using GPU infrastructure for the run. This cannot be generated
-  automatically — if the assignment specifically requires the **BITS-provided** infrastructure
-  for this screenshot, make sure at least the graded full run (or an equivalent one) was done
-  there, not only on Colab.
+  session showing the environment cell / `nvidia-smi` output with the notebook running, as
+  proof of GPU infrastructure in use. This cannot be generated automatically — if the
+  assignment specifically requires the **BITS-provided** infrastructure for this screenshot,
+  make sure at least the graded full run (or an equivalent one) was done on Group 1, not only
+  on Colab/Kaggle.
 
 ## What to send back here
 
-Once the full run finishes on whichever platform you used, share:
+Once the full run finishes, share:
 - `outputs/results/partA_results.json` and `outputs/results/partB_results.json` (or just paste
-  the printed results tables), so the results table and runtimes in this README can be filled
-  in from the real numbers.
+  the printed results tables), so the results table and runtimes below can be filled in from
+  the real numbers.
 - Any errors or tracebacks you hit that smoke-testing here didn't catch.
 - Which platform(s) you ran on and roughly how long each part took.
 
@@ -295,12 +459,12 @@ full run completes — do not hand-type values here._
    only) and no PyTorch preinstalled. All code was written and smoke-tested there
    (`QUICK_RUN = True`, on CPU/Apple MPS via a throwaway local `.venv_smoketest` virtual
    environment — **not part of this submission**) to catch code-level bugs cheaply, but the
-   full `QUICK_RUN = False` run was deliberately not attempted locally and is being run on
-   BITS Lab / Colab GPU infrastructure instead, per Step 0–4 above. Two issues specific to
-   that local Apple MPS backend were found and fixed in `udl_utils.py` /
-   `build_notebooks.py` (an MPS/float64 limitation in the FID metric, and MPS memory growth
-   over long training loops); neither affects CUDA, so they're corrections, not deviations, for
-   the CUDA runs this README targets.
+   full `QUICK_RUN = False` run was deliberately not attempted locally and is being run on GPU
+   infrastructure instead, per the platform sections above. Two issues specific to that local
+   Apple MPS backend were found and fixed in `udl_utils.py` / `build_notebooks.py` (an
+   MPS/float64 limitation in the FID metric, and MPS memory growth over long training loops);
+   neither affects CUDA, so they're corrections, not deviations, for the CUDA runs this README
+   targets.
 2. _(Any further deviations — changed epoch counts, platform used, retrained models — found
    while running the full pipeline will be listed here.)_
 
@@ -310,4 +474,4 @@ full run completes — do not hand-type values here._
 - [ ] `UDL_Group91_Assignment2_PartB.ipynb` + `.html` (full run, `QUICK_RUN = False`)
 - [ ] `UDL_Group91_Assignment2_PartC.pdf`
 - [ ] `UDL_Group91_Assignment2_Lab_Screenshot.jpg` — **take manually**, showing BITS-provided
-      GPU infrastructure in use (see note in Step 7)
+      GPU infrastructure in use (see note above)
