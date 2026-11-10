@@ -62,6 +62,27 @@ def print_env_banner(device: torch.device) -> None:
 # Data
 # --------------------------------------------------------------------------- #
 
+class _HuggingFaceCIFAR10(torch.utils.data.Dataset):
+    """Fallback CIFAR-10 wrapper backed by the `uoft-cs/cifar10` HF dataset (identical
+    50,000/10,000 split and class order to torchvision's), for when torchvision's own
+    download from cs.toronto.edu is unreachable or returns corrupted data (a known,
+    currently ongoing upstream outage on some networks as of late 2025/2026)."""
+
+    def __init__(self, data_dir: Path, train: bool, transform):
+        from datasets import load_dataset
+
+        split = "train" if train else "test"
+        self._hf_ds = load_dataset("uoft-cs/cifar10", split=split, cache_dir=str(data_dir / "hf_cache"))
+        self.transform = transform
+
+    def __len__(self):
+        return len(self._hf_ds)
+
+    def __getitem__(self, idx):
+        row = self._hf_ds[idx]
+        return self.transform(row["img"].convert("RGB")), row["label"]
+
+
 def get_loaders(batch_size: int, data_dir: Optional[Path] = None):
     """Official CIFAR-10 train/test split, pixels in [0, 1], no augmentation."""
     data_dir = data_dir or Path(os.environ.get("CIFAR10_DIR", "./data"))
@@ -69,12 +90,18 @@ def get_loaders(batch_size: int, data_dir: Optional[Path] = None):
 
     tfm = transforms.ToTensor()  # scales to [0, 1], no mean/std normalisation
 
-    train_set = torchvision.datasets.CIFAR10(
-        root=str(data_dir), train=True, download=True, transform=tfm
-    )
-    test_set = torchvision.datasets.CIFAR10(
-        root=str(data_dir), train=False, download=True, transform=tfm
-    )
+    try:
+        train_set = torchvision.datasets.CIFAR10(
+            root=str(data_dir), train=True, download=True, transform=tfm
+        )
+        test_set = torchvision.datasets.CIFAR10(
+            root=str(data_dir), train=False, download=True, transform=tfm
+        )
+    except Exception as exc:
+        print(f"torchvision's CIFAR-10 download from cs.toronto.edu failed ({exc}); "
+              f"falling back to the Hugging Face mirror (uoft-cs/cifar10, identical data)...")
+        train_set = _HuggingFaceCIFAR10(data_dir, train=True, transform=tfm)
+        test_set = _HuggingFaceCIFAR10(data_dir, train=False, transform=tfm)
 
     num_workers = 0 if os.name == "nt" else min(4, os.cpu_count() or 1)
     pin_memory = torch.cuda.is_available()

@@ -21,6 +21,20 @@ just re-run the same cell/command and it continues from exactly where it left of
 version of this code only saved the final checkpoint at the very end of each model's training,
 which meant an interrupted run restarted that model from scratch — fixed now.)
 
+## Troubleshooting: CIFAR-10 download fails (`RuntimeError: File not found or corrupted`)
+
+`torchvision`'s built-in CIFAR-10 downloader points at `cs.toronto.edu`, which — independent of
+which platform or network you're on — currently redirects to a host (`cave.cs.toronto.edu`)
+that is often unreachable; this breaks `download=True` for everyone on the current torchvision
+release, not just locked-down lab networks. `get_loaders()` in `udl_utils.py` now handles this
+automatically: if torchvision's download fails, it falls back to the identical CIFAR-10 data
+(same 50,000/10,000 split, same class order) hosted on Hugging Face (`uoft-cs/cifar10`) via the
+`datasets` package (already in `requirements.txt`). You'll see a one-line notice printed when
+the fallback kicks in — that's expected, not an error. If it still fails, it means outbound
+access to `huggingface.co` is also blocked on that network; in that case, download the dataset
+on a machine that does have access and copy the resulting `./data/` folder (or Hugging Face
+cache) over.
+
 ## Folder layout
 
 ```
