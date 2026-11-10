@@ -25,7 +25,7 @@ def header_md(title, overview):
     return (
         "# " + title + "\n"
         "**Course:** Unsupervised Deep Learning (S1-26_AIMLZG533)   "
-        "**Assessment:** Assignment 2   **Group:** 91   **Total Marks:** 10\n"
+        "**Assessment:** Assignment 2   **Group:** 91\n"
         + STUDENT_TABLE_MD + "\n" + overview
     )
 
@@ -169,7 +169,7 @@ print("Done.")
 '''
 
 PARTA_A1_INTRO = """
-## Part A1 — (β-)VAE, β ∈ {1, 2, 4, 10}  [2 marks]
+## Part A1 — (β-)VAE, β ∈ {1, 2, 4, 10}
 
 Same encoder/decoder architecture for every β; only β (the KL weight) changes.
 
@@ -462,7 +462,7 @@ _display(Markdown("\n".join(lines)))
 '''
 
 PARTA_A2_INTRO = """
-## Part A2 — VQ-VAE with PixelCNN prior, K ∈ {512, 256, 128}  [3 marks]
+## Part A2 — VQ-VAE with PixelCNN prior, K ∈ {512, 256, 128}
 
 Same VQ-VAE architecture for every K (codebook size); only K changes. Codebook embedding
 dimension D = 64, EMA codebook updates (decay 0.99, ε = 1e-5), commitment cost β_c = 0.25,
@@ -1630,7 +1630,7 @@ story = []
 # 1. Title + student table
 story.append(Paragraph("Assignment 2 — Image Generation using (beta-)VAE, VQ-VAE and WGAN", styles["H1c"]))
 story.append(Paragraph("Course: Unsupervised Deep Learning (S1-26_AIMLZG533) &nbsp;&nbsp; "
-                        "Assessment: Assignment 2 &nbsp;&nbsp; Group: 91 &nbsp;&nbsp; Total Marks: 10", body))
+                        "Assessment: Assignment 2 &nbsp;&nbsp; Group: 91", body))
 story.append(Spacer(1, 0.5 * cm))
 
 student_rows = [
