@@ -880,6 +880,7 @@ PIXELCNN_TRAIN = r'''
 def train_pixelcnn(K, epochs, train_idx, test_idx):
     tag = f"pixelcnn_k{K}"
     ckpt_path = OUT / "checkpoints" / f"{tag}.pt"
+    best_ckpt_path = OUT / "checkpoints" / f"{tag}_best.pt"
     hist_path = OUT / "history" / f"{tag}.json"
 
     H, W = train_idx.shape[1], train_idx.shape[2]
@@ -907,6 +908,9 @@ def train_pixelcnn(K, epochs, train_idx, test_idx):
     else:
         history = {"epoch": [], "train_nll_nats": [], "test_nll_nats": [],
                    "train_bits_per_latent": [], "test_bits_per_latent": [], "epoch_time_s": []}
+
+    best_test_nll = min(history["test_nll_nats"]) if history["test_nll_nats"] else float("inf")
+    best_epoch = history["epoch"][int(np.argmin(history["test_nll_nats"]))] if history["test_nll_nats"] else None
 
     if start_epoch <= epochs:
         for epoch in range(start_epoch, epochs + 1):
@@ -942,6 +946,10 @@ def train_pixelcnn(K, epochs, train_idx, test_idx):
             print(f"[PixelCNN K={K}] epoch {epoch:3d}/{epochs}  train_nll={ep_nll:.3f}nats  "
                   f"test_nll={test_nll:.3f}nats  test_bits/latent={test_nll/math.log(2):.3f}  "
                   f"time={t['elapsed']:.1f}s")
+            if test_nll < best_test_nll:
+                best_test_nll, best_epoch = test_nll, epoch
+                torch.save(model.state_dict(), best_ckpt_path)
+
             if DEVICE.type == "mps":
                 torch.mps.empty_cache()  # MPS caching allocator can otherwise grow unbounded over long runs
 
@@ -958,6 +966,19 @@ def train_pixelcnn(K, epochs, train_idx, test_idx):
               f"test_nll={history['test_nll_nats'][i]:.3f}nats  "
               f"test_bits/latent={history['test_bits_per_latent'][i]:.3f}  "
               f"time={history['epoch_time_s'][i]:.1f}s")
+
+    # The prior is trained for a fixed epoch budget to show the full over-/under-fitting
+    # curve, but test NLL keeps climbing well past its minimum (overfitting); sampling and
+    # the reported bits/latent should use the best (lowest test-NLL) checkpoint, not
+    # whatever epoch happened to be last.
+    history["best_epoch"] = best_epoch
+    history["best_test_nll_nats"] = best_test_nll
+    history["best_test_bits_per_latent"] = best_test_nll / math.log(2)
+    save_json(history, hist_path)
+    if best_ckpt_path.exists():
+        model.load_state_dict(torch.load(best_ckpt_path, map_location=DEVICE))
+        print(f"[PixelCNN K={K}] Using best checkpoint from epoch {best_epoch} "
+              f"(test_nll={best_test_nll:.3f}nats) for sampling/reporting, not the final epoch.")
 
     return model, history, (H, W)
 
@@ -1033,7 +1054,8 @@ for K in KS:
         "test_mse": h["test_mse"][-1],
         "recon_fid": vq_recon_fid[K],
         "sample_fid_pixelcnn": vq_fid_results[K],
-        "pixelcnn_test_bits_per_latent": ph["test_bits_per_latent"][-1],
+        "pixelcnn_test_bits_per_latent": ph["best_test_bits_per_latent"],
+        "pixelcnn_best_epoch": ph["best_epoch"],
         "perplexity": h["perplexity"][-1],
         "codes_used_pct": h["codes_used_pct"][-1],
         "dead_codes_last_epoch": h["dead_codes_reset"][-1],
@@ -1462,12 +1484,21 @@ for name in ["wgan", "wgangp"]:
             _ = generator(torch.randn(min(1000, FINAL_FID_N), Z_DIM, device=DEVICE))
     sample_time_10k = t["elapsed"] * (10000 / min(1000, FINAL_FID_N))
 
+    # history["iter_time_s"] holds one single iteration's time sampled every LOG_EVERY
+    # iterations (for the progress log), not every iteration — summing those ~gen_iters/LOG_EVERY
+    # samples would undercount total training time by a factor of ~LOG_EVERY. Extrapolate the
+    # mean per-iteration time over the actual number of iterations completed instead.
+    if h["iter_time_s"] and h["iteration"]:
+        train_time_s = float(np.mean(h["iter_time_s"])) * h["iteration"][-1]
+    else:
+        train_time_s = None
+
     final_results[name] = {
         "final_fid": final_fid,
         "best_fid_quick_eval": best_fid_quick,
         "best_fid_full_protocol": best_fid_full,
         "best_iteration": best_iter,
-        "train_time_s": sum(h["iter_time_s"]) if h["iter_time_s"] else None,
+        "train_time_s": train_time_s,
         "sample_time_10k_s": sample_time_10k,
         "sample_time_per_100_s": sample_time_10k / 100,
     }
